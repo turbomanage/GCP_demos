@@ -1,7 +1,6 @@
 #standardSQL
 CREATE VIEW IF NOT EXISTS covid19.daily_new_cases AS
 SELECT state, county, date,
-first_value(cases) OVER recent as tot_cases,
 cases - lead(cases) OVER recent as new_cases, cases,
 deaths - lead(deaths) OVER recent as new_deaths, deaths
 FROM `cpb100-151023.covid19.us_counties`
