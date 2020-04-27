@@ -17,29 +17,31 @@ date,county,state,fips,cases,deaths
 2020-01-25,Snohomish,Washington,53061,1,0
 ...
 ```
-The counties CSV contains a row for each county and each day containing the CUMULATIVE number of cases and deaths in the county. The ```fips``` column contains the [FIPS county code](https://en.wikipedia.org/wiki/FIPS_county_code) (Federal Information Processing Standard), which allows us to join the COVID data easily with other BigQuery public datasets containing population, land area, and geographic boundaries for each county in the US.
+The counties CSV contains a row for each county and each day containing the CUMULATIVE number of cases and deaths in the county. The `fips` column contains the [FIPS county code](https://en.wikipedia.org/wiki/FIPS_county_code) (Federal Information Processing Standard), which allows us to join the COVID data easily with other BigQuery public datasets containing population, land area, and geographic boundaries for each county in the US.
 
  # Create a Pipeline
- In order to process this data most effectively in a variety of tools, let's import it into BigQuery. We'll do this using a simple shell script to download the data using ```wget``` and import it using ```bq load```. Here's the script:
+ In order to process this data most effectively in a variety of tools, let's import it into BigQuery. We'll do this using a simple shell script to download the data using `wget` and import it using `bq load`. Here's the script:
  
  ```shell script
 #!/bin/bash
-cd /home/drfib13/covid19
+# Change to your bucket
+export BUCKET="[YOUR_GCS_BUCKET]"
+cd ~/covid19
 export today="$(date +"%Y-%m-%d")"
 mkdir $today
 cd $today
 wget https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv
 wget https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv
 cd ..
-gsutil cp -r "$today" gs://drfib-usc1/covid19/
+gsutil cp -r "$today" gs://$BUCKET/covid19/
 bq load --source_format=CSV --autodetect --replace \
 	covid19.us_counties \
-	gs://drfib-usc1/covid19/"$today"/us-counties.csv
+	gs://$BUCKET/covid19/"$today"/us-counties.csv
 bq load --source_format=CSV --autodetect --replace \
 	covid19.us_states \
-	gs://drfib-usc1/covid19/"$today"/us-states.csv
-bq query </home/drfib13/demo/covid19/create_views.sql
-bq query </home/drfib13/demo/covid19/materialize.sql
+	gs://$BUCKET/covid19/"$today"/us-states.csv
+bq query <~/demo/covid19/create_views.sql
+bq query <~/demo/covid19/materialize.sql
 ```
 In a nutshell, we create a new directory for each day's imported data, then download it and import it into BigQuery. This is a super lazy script, as it automatically detects the schema and replaces the table each day, but NYT is updating the file in place each day, so that's all we need.
 
@@ -84,12 +86,12 @@ In the BigQuery console, navigate to the us_counties table and click Preview. Yo
 
 To run the script as a cron job every day, run `crontab -e`. That will open the crontab editor. At the end of the file, paste in the following entry: 
 ```shell script
-00 17 * * * /home/[USER_NAME]/demo/covid19/import.sh
+00 17 * * * /home/[USER]/demo/covid19/import.sh
 ```
-Replace [USER_NAME] with your actual Unix username shown at the prompt. Save the file. Now the import script will run once a day at 17:00 UTC, which is usually when the latest updates are available in the NYT github repo. 
+Replace [USER] with your actual Unix username shown at the prompt. Save the file. Now the import script will run once a day at 17:00 UTC, which is usually when the latest updates are available in the NYT github repo. 
 
 ## Enhance the data
-The raw data has the runnign cumulative totals for each county, but we'd like to compute the new cases each day by county as well as have a single table which contains only the most recent totals for each county. We'll look at each of these in turn.
+The raw data has the running cumulative totals for each county, but we'd like to compute the new cases each day by county as well as have a single table which contains only the most recent totals for each county. We'll look at each of these in turn.
 ### Compute daily new cases by county
 We can do this easily using a BigQuery analytical function. Analytical functions let you define a window of the data over which to perform the analysis. In order to compute the difference of cases for each day, we need a window for each state and county with the data in descending order by date. We define a window named ```recent``` like this:
 ```sql
@@ -124,7 +126,7 @@ The output looks like this:
 Note that the first value of new_deaths is negative. This happens when a county revises the cumulative total downward for some reason. Now we have a view that computes the daily new cases for us, which is going to be very useful for our dashboard.
 
 ### Store only the most recent totals
-In addition to showing the daily new cases, we'll want to show the total number of cases on a dashboard. In order to support this, let's extract just the latest data for each county. We could filter by today's or yesterday's date, but won't always work because some counties report later than others. Therefore, we just want the latest data for each county. Once again, a BigQuery navigation function comes to the rescue. We'll define the same window again but now select only the first row in the window, which represents the most recent data regardless of the specific date. The resulting view looks like this:
+In addition to showing the daily new cases, we'll want to show the total number of cases on a dashboard. In order to support this, let's extract just the latest data for each county. We could filter by today's or yesterday's date, but that won't always work because some counties report later than others. Therefore, we just want the latest data for each county. Once again, a BigQuery navigation function comes to the rescue. We'll define the same window again but now select only the first row in the window, which represents the most recent data regardless of the specific date. The resulting view looks like this:
 ```sql
 CREATE VIEW IF NOT EXISTS covid19.most_recent_totals AS
 WITH most_recent AS (
