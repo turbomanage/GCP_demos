@@ -143,3 +143,42 @@ WHERE rownum = 1
 ```
 This view selects only the first row from each partition (county), so we'll now have only one row for each county containing the latest data.
 
+## Map the data
+Many BigQuery public datasets include GIS info so we can now easily join that data with our COVID data. Here's a query to show the states with the most cases. We join it with the utility_us dataset to get geographic boundaries for each state along with the total number of COVID cases in the state.
+
+```sql
+WITH covid as 
+(
+SELECT state, MAX(cases) max_cases 
+FROM covid19.us_counties v
+GROUP BY state
+)
+SELECT s.state_name, covid.max_cases, s.state_geom 
+FROM `bigquery-public-data.utility_us.us_states_area` s
+JOIN covid ON (covid.state = s.state_name)
+ORDER BY max_cases DESC
+``` 
+Note that the column `state_geom` contains the lat/long boundaries for each state. Rather than print the results here, we can map them using [BigQuery GeoViz](https://bigquerygeoviz.appspot.com). Using the same technique as described in the [BigQuery GeoViz demo](https://github.com/GoogleCloudPlatform/training-data-analyst/blob/master/courses/data-engineering/demos/bigquery_geoviz.md), we can shade each state according to the number of cases. Here is the resulting map as of Apr 26, 2020.
+![Map of US states shaded by number of cases](img/cases_by_state.png)
+
+Furthermore, we can map individual counties. Let's look at the data for Illinois, which has the next highest number of cases to New York. Here's the query which joins the to `utility_us` dataset to obtain the bundaries for each county:
+```sql
+WITH covid as 
+(
+SELECT MAX(cases) max_cases, LPAD(cast(fips as string), 5, "0") as fips 
+FROM covid19.us_counties v
+WHERE state = 'Illinois'
+GROUP BY fips
+)
+SELECT county_name, s.state_name, covid.max_cases, county_geom
+FROM `bigquery-public-data.utility_us.us_county_area` c
+JOIN covid ON (CAST(covid.fips as string) = concat(state_fips_code, county_fips_code) )
+JOIN bigquery-public-data.utility_us.us_states_area s ON (c.state_fips_code = s.state_fips_code)
+ORDER BY max_cases DESC
+``` 
+It turns out that the `utility_us.us_county_area` table doesn't have the full FIPS code, which consists of a state ID concatenated with the county ID, so we use the CONCAT SQL operator to create the composite ID. We also have to do a little string manipulation to get the FIPS code from our COVID data into the same format. Otherwise, it's a straightforward join. If we plot the data for Illinois in BigQuery GeoViz, it looks like this:
+![Map of Illinois showing cases by county](img/illinois_cases.png)
+
+## Create a DataStudio Dashboard
+
+
