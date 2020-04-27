@@ -13,3 +13,4 @@ bq load --source_format=CSV --autodetect --replace \
 bq load --source_format=CSV --autodetect --replace \
 	covid19.us_states \
 	gs://drfib-usc1/covid19/"$today"/us-states.csv
+bq query </home/drfib13/demo/covid19/materialize.sh
