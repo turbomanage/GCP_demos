@@ -1,5 +1,9 @@
 # Creating a Pipeline and Dashboard for COVID-19 Data
-The New York Times is publishing COVID-19 data on a county-by-county basis daily. In this demo, we create a pipeline to import the data into BigQuery daily and then create a map and DataStudio dashboard to visualize the data.
+
+by _David Chandler_<br>
+Technical Instructor, Google Cloud Platform
+
+The New York Times is publishing COVID-19 data on a county-by-county basis daily. In this post, we create a pipeline to import the data into BigQuery daily and then create a map and DataStudio dashboard to visualize the data.
 ## Explore the Data
 First let's look at the sample data from the [NYT repo on Github](https://raw.githubusercontent.com/nytimes/covid-19-data/master/):
 
@@ -179,6 +183,28 @@ ORDER BY max_cases DESC
 It turns out that the `utility_us.us_county_area` table doesn't have the full FIPS code, which consists of a state ID concatenated with the county ID, so we use the CONCAT SQL operator to create the composite ID. We also have to do a little string manipulation to get the FIPS code from our COVID data into the same format. Otherwise, it's a straightforward join. If we plot the data for Illinois in BigQuery GeoViz, it looks like this:
 ![Map of Illinois showing cases by county](img/illinois_cases.png)
 
-## Create a DataStudio Dashboard
+## Optimizing DataStudio
+Here is a [COVID-19 US dashboard](https://datastudio.google.com/reporting/1ae55c55-9993-4a17-83a1-17cd1bbdf180) built with DataStudio. It's mostly self-explanatory how to build reports using DataStudio. It's easy to add a date range control, which can be used to filter the data from all other graphs by specifying which field in the data source represents the "Date range dimension." Likewise, you can easily make table controls clickable simply by checking the "Apply filter" box in its data properties. That's how the clickable county table on the right side of the dashboard works.
 
+![COVID-19 US dashboard](img/covid19_dashboard.png)
+
+Earlier in this post, we looked at a SQL view that computes daily new cases as well a SQL view that provides only the most recent totals for each county. Each of these represents a separate BigQuery data source in Data Studio so they can be attached to controls. The scorecard elements on page 1, for example, showing the total number of cases and deaths, use the `most_recent_totals` view. However, when using a view directly, performance suffers. DataStudio BigQuery data sources are backed by [BI Engine](https://cloud.google.com/bi-engine), which caches data in memory to avoid having to run a query every time a user selects a different state or county, for example. However, BI Engine is not yet smart enough to cache SQL views, only regular tables. As a workaround, we can manually materialize views by creating tables. The last part of the daily import script above runs `materialize.sql`, which looks like this:
+
+```sql
+#standardSQL
+create or replace table covid19.us_daily_cases as
+select * from covid19.daily_new_cases
+        order by state, county, date
+;
+create or replace table covid19.us_totals as
+select * from covid19.most_recent_totals
+        order by state, county
+```
+
+We simply select all data from the view and order it according to the most common use case. We are effectively duplicating data; however, in this case, that is a small price to pay for the much improved performance of BI Engine. The current dataset is really small (<10 MB at this writing) so we could duplicate it 50x before getting charged even a penny per month for storage. You can confirm that BI Engine is in use when you see the lightning symbol above a chart or table. Also you'll notice the performance improvement: the COVID dashboard I've shared responds in miliseconds with BI Engine vs. seconds without. BI Engine has a decent free tier (1GB RAM at time of writing) so using it in this dashboard is a no-brainer. If our dataset were larger, we would use [partitioning](https://github.com/GoogleCloudPlatform/training-data-analyst/blob/master/courses/data-engineering/demos/partition.md) and [clustering](https://github.com/GoogleCloudPlatform/training-data-analyst/blob/master/courses/data-engineering/demos/clustering.md) along with BI Engine to realize performance improvements; however, this one is too small to benefit.
+
+BigQuery [materialized views](https://cloud.google.com/bigquery/docs/materialized-views-intro) are now in beta. Hopefully in the future, BI Engine will work with them and the workaround described here will longer be necessary.
+ 
+## Summary
+BigQuery's supporting free tools like GeoViz and DataStudio make it very productive for data exploration. BigQuery is productive even for small datasets and grows exponentially more powerful with larger datasets up to hundreds of petabytes. In a future post, we'll look at another powerful exploration tool now in beta, BigQuery Connected Sheets.
 
