@@ -1,0 +1,1 @@
+gsutil perfdiag -o test.json -s 100M gs://drfib-usc1
