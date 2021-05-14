@@ -1,6 +1,6 @@
 #!/bin/bash
 # Change to your bucket
-export BUCKET="[YOUR_GCS_BUCKET]"
+export BUCKET="drfib"
 cd ~/covid19
 export today="$(date +"%Y-%m-%d")"
 mkdir $today
@@ -17,3 +17,5 @@ bq load --source_format=CSV --autodetect --replace \
 	gs://$BUCKET/covid19/"$today"/us-states.csv
 bq query <~/demo/covid19/create_views.sql
 bq query <~/demo/covid19/materialize.sql
+bq query <~/demo/covid19/per_capita.sql
+bq query <~/demo/covid19/rolling.sql
