@@ -1,0 +1,126 @@
+
+==============================================================================
+                              DIAGNOSTIC RESULTS                              
+==============================================================================
+
+------------------------------------------------------------------------------
+                                   Latency                                    
+------------------------------------------------------------------------------
+Operation       Size  Trials  Mean (ms)  Std Dev (ms)  Median (ms)  90th % (ms)
+=========  =========  ======  =========  ============  ===========  ===========
+   Delete        0 B       5       37.8           4.1         38.9         41.6 
+   Delete      1 KiB       5       39.4          12.1         34.1         53.3 
+   Delete    100 KiB       5       37.4           2.9         36.9         40.5 
+   Delete      1 MiB       5       35.0           5.1         33.9         40.5 
+ Download        0 B       5       46.2           3.2         44.4         50.2 
+ Download      1 KiB       5       63.1          19.5         57.3         84.4 
+ Download    100 KiB       5       80.0          34.5         61.0        120.2 
+ Download      1 MiB       5       91.3          39.4         66.7        139.6 
+ Metadata        0 B       5       33.8           9.9         36.5         44.1 
+ Metadata      1 KiB       5       26.1           6.5         22.9         33.9 
+ Metadata    100 KiB       5       27.5           3.3         29.2         29.8 
+ Metadata      1 MiB       5       25.6           3.3         26.6         29.0 
+   Upload        0 B       5       65.7           4.1         65.1         70.4 
+   Upload      1 KiB       5       66.0           7.7         61.4         75.6 
+   Upload    100 KiB       5       97.7          19.0         89.5        120.7 
+   Upload      1 MiB       5      136.5          12.0        131.0        151.1 
+
+------------------------------------------------------------------------------
+                               Write Throughput                               
+------------------------------------------------------------------------------
+Copied 5 100 MiB file(s) for a total transfer size of 500 MiB.
+Write throughput: 754.68 Mibit/s.
+Parallelism strategy: None
+
+------------------------------------------------------------------------------
+                               Read Throughput                                
+------------------------------------------------------------------------------
+Copied 5 100 MiB file(s) for a total transfer size of 500 MiB.
+Read throughput: 2.07 Gibit/s.
+Parallelism strategy: None
+
+------------------------------------------------------------------------------
+                              System Information                              
+------------------------------------------------------------------------------
+IP Address: 
+  172.17.0.2
+Temporary Directory: 
+  /tmp
+Bucket URI: 
+  gs://drfib-usc1/
+gsutil Version: 
+  4.50
+boto Version: 
+  2.49.0
+Measurement time: 
+ 2020-05-18 08:45:11 PM 
+Running on GCE: 
+  True
+GCE Instance:
+	
+Bucket location: 
+  US-CENTRAL1
+Bucket storage class: 
+  REGIONAL
+Google Server: 
+  ns1
+Google Server IP Addresses: 
+  172.217.214.128
+Google Server Hostnames: 
+  
+Google DNS thinks your IP is: 
+  None
+CPU Count: 
+  2
+CPU Load Average: 
+  [0.91, 0.88, 0.64]
+Total Memory: 
+  1.9 GiB
+Free Memory: 
+  750.73 MiB
+TCP segments sent during test:
+  481092
+TCP segments received during test:
+  58577
+TCP segments retransmit during test:
+  7555
+Disk Counter Deltas:
+    disk    reads   writes   rbytes   wbytes    rtime    wtime 
+   dm-0        8        0   131072        0       15        0 
+   sda1       94      504  1261568 72720384      136     3973 
+  sda10        0        0        0        0        0        0 
+  sda11        0        0        0        0        0        0 
+  sda12        0        0        0        0        0        0 
+   sda2        0        0        0        0        0        0 
+   sda3        9        0   393216        0       12        0 
+   sda4        0        0        0        0        0        0 
+   sda5        0        0        0        0        0        0 
+   sda6        0        0        0        0        0        0 
+   sda7        0        0        0        0        0        0 
+   sda8        0        0        0        0        0        0 
+   sda9        0        0        0        0        0        0 
+   sdb1        0        0        0        0        0        0 
+  zram0       23        0    94208        0        1        0 
+TCP /proc values:
+    tcp_timestamps = 1
+   tcp_sack = 1
+   tcp_window_scaling = 1
+Boto HTTPS Enabled: 
+  True
+Requests routed through proxy: 
+  False
+Latency of the DNS lookup for Google Storage server (ms): 
+  1.5
+Latencies connecting to Google Storage server IPs (ms):
+  172.217.214.128 = 1.1
+
+------------------------------------------------------------------------------
+                          In-Process HTTP Statistics                          
+------------------------------------------------------------------------------
+Total HTTP requests made: 94
+HTTP 5xx errors: 0
+HTTP connections broken: 0
+Availability: 100%
+
+Output file written to '/home/drfib13/demos/gcs/test.json'.
+

@@ -1,0 +1,8 @@
+indexes:
+- kind: President
+  properties:
+  - name: firstName
+    direction: asc
+  - name: endYear
+    direction: desc
+

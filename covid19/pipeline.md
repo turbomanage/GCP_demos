@@ -1,5 +1,9 @@
 # Creating a Pipeline and Dashboard for COVID-19 Data
-The New York Times is publishing COVID-19 data on a county-by-county basis daily. In this demo, we create a pipeline to import the data into BigQuery daily and then create a map and DataStudio dashboard to visualize the data.
+
+by _David Chandler_<br>
+Technical Instructor, Google Cloud Platform
+
+The New York Times is publishing COVID-19 data on a county-by-county basis daily. In this post, we create a pipeline to import the data into BigQuery daily and then create a map and DataStudio dashboard to visualize the data.
 ## Explore the Data
 First let's look at the sample data from the [NYT repo on Github](https://raw.githubusercontent.com/nytimes/covid-19-data/master/):
 
@@ -17,29 +21,31 @@ date,county,state,fips,cases,deaths
 2020-01-25,Snohomish,Washington,53061,1,0
 ...
 ```
-The counties CSV contains a row for each county and each day containing the CUMULATIVE number of cases and deaths in the county. The ```fips``` column contains the [FIPS county code](https://en.wikipedia.org/wiki/FIPS_county_code) (Federal Information Processing Standard), which allows us to join the COVID data easily with other BigQuery public datasets containing population, land area, and geographic boundaries for each county in the US.
+The counties CSV contains a row for each county and each day containing the CUMULATIVE number of cases and deaths in the county. The `fips` column contains the [FIPS county code](https://en.wikipedia.org/wiki/FIPS_county_code) (Federal Information Processing Standard), which allows us to join the COVID data easily with other BigQuery public datasets containing population, land area, and geographic boundaries for each county in the US.
 
  # Create a Pipeline
- In order to process this data most effectively in a variety of tools, let's import it into BigQuery. We'll do this using a simple shell script to download the data using ```wget``` and import it using ```bq load```. Here's the script:
+ In order to process this data most effectively in a variety of tools, let's import it into BigQuery. We'll do this using a simple shell script to download the data using `wget` and import it using `bq load`. Here's the script:
  
  ```shell script
 #!/bin/bash
-cd /home/drfib13/covid19
+# Change to your bucket
+export BUCKET="[YOUR_GCS_BUCKET]"
+cd ~/covid19
 export today="$(date +"%Y-%m-%d")"
 mkdir $today
 cd $today
 wget https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv
 wget https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv
 cd ..
-gsutil cp -r "$today" gs://drfib-usc1/covid19/
+gsutil cp -r "$today" gs://$BUCKET/covid19/
 bq load --source_format=CSV --autodetect --replace \
 	covid19.us_counties \
-	gs://drfib-usc1/covid19/"$today"/us-counties.csv
+	gs://$BUCKET/covid19/"$today"/us-counties.csv
 bq load --source_format=CSV --autodetect --replace \
 	covid19.us_states \
-	gs://drfib-usc1/covid19/"$today"/us-states.csv
-bq query </home/drfib13/demo/covid19/create_views.sql
-bq query </home/drfib13/demo/covid19/materialize.sql
+	gs://$BUCKET/covid19/"$today"/us-states.csv
+bq query <~/demo/covid19/create_views.sql
+bq query <~/demo/covid19/materialize.sql
 ```
 In a nutshell, we create a new directory for each day's imported data, then download it and import it into BigQuery. This is a super lazy script, as it automatically detects the schema and replaces the table each day, but NYT is updating the file in place each day, so that's all we need.
 
@@ -84,12 +90,12 @@ In the BigQuery console, navigate to the us_counties table and click Preview. Yo
 
 To run the script as a cron job every day, run `crontab -e`. That will open the crontab editor. At the end of the file, paste in the following entry: 
 ```shell script
-00 17 * * * /home/[USER_NAME]/demo/covid19/import.sh
+00 17 * * * /home/[USER]/demo/covid19/import.sh
 ```
-Replace [USER_NAME] with your actual Unix username shown at the prompt. Save the file. Now the import script will run once a day at 17:00 UTC, which is usually when the latest updates are available in the NYT github repo. 
+Replace [USER] with your actual Unix username shown at the prompt. Save the file. Now the import script will run once a day at 17:00 UTC, which is usually when the latest updates are available in the NYT github repo. 
 
 ## Enhance the data
-The raw data has the runnign cumulative totals for each county, but we'd like to compute the new cases each day by county as well as have a single table which contains only the most recent totals for each county. We'll look at each of these in turn.
+The raw data has the running cumulative totals for each county, but we'd like to compute the new cases each day by county as well as have a single table which contains only the most recent totals for each county. We'll look at each of these in turn.
 ### Compute daily new cases by county
 We can do this easily using a BigQuery analytical function. Analytical functions let you define a window of the data over which to perform the analysis. In order to compute the difference of cases for each day, we need a window for each state and county with the data in descending order by date. We define a window named ```recent``` like this:
 ```sql
@@ -124,7 +130,7 @@ The output looks like this:
 Note that the first value of new_deaths is negative. This happens when a county revises the cumulative total downward for some reason. Now we have a view that computes the daily new cases for us, which is going to be very useful for our dashboard.
 
 ### Store only the most recent totals
-In addition to showing the daily new cases, we'll want to show the total number of cases on a dashboard. In order to support this, let's extract just the latest data for each county. We could filter by today's or yesterday's date, but won't always work because some counties report later than others. Therefore, we just want the latest data for each county. Once again, a BigQuery navigation function comes to the rescue. We'll define the same window again but now select only the first row in the window, which represents the most recent data regardless of the specific date. The resulting view looks like this:
+In addition to showing the daily new cases, we'll want to show the total number of cases on a dashboard. In order to support this, let's extract just the latest data for each county. We could filter by today's or yesterday's date, but that won't always work because some counties report later than others. Therefore, we just want the latest data for each county. Once again, a BigQuery navigation function comes to the rescue. We'll define the same window again but now select only the first row in the window, which represents the most recent data regardless of the specific date. The resulting view looks like this:
 ```sql
 CREATE VIEW IF NOT EXISTS covid19.most_recent_totals AS
 WITH most_recent AS (
@@ -140,4 +146,65 @@ FROM most_recent
 WHERE rownum = 1
 ```
 This view selects only the first row from each partition (county), so we'll now have only one row for each county containing the latest data.
+
+## Map the data
+Many BigQuery public datasets include GIS info so we can now easily join that data with our COVID data. Here's a query to show the states with the most cases. We join it with the utility_us dataset to get geographic boundaries for each state along with the total number of COVID cases in the state.
+
+```sql
+WITH covid as 
+(
+SELECT state, MAX(cases) max_cases 
+FROM covid19.us_counties v
+GROUP BY state
+)
+SELECT s.state_name, covid.max_cases, s.state_geom 
+FROM `bigquery-public-data.utility_us.us_states_area` s
+JOIN covid ON (covid.state = s.state_name)
+ORDER BY max_cases DESC
+``` 
+Note that the column `state_geom` contains the lat/long boundaries for each state. Rather than print the results here, we can map them using [BigQuery GeoViz](https://bigquerygeoviz.appspot.com). Using the same technique as described in the [BigQuery GeoViz demo](https://github.com/GoogleCloudPlatform/training-data-analyst/blob/master/courses/data-engineering/demos/bigquery_geoviz.md), we can shade each state according to the number of cases. Here is the resulting map as of Apr 26, 2020.
+![Map of US states shaded by number of cases](img/cases_by_state.png)
+
+Furthermore, we can map individual counties. Let's look at the data for Illinois, which has the next highest number of cases to New York. Here's the query which joins the to `utility_us` dataset to obtain the bundaries for each county:
+```sql
+WITH covid as 
+(
+SELECT MAX(cases) max_cases, LPAD(cast(fips as string), 5, "0") as fips 
+FROM covid19.us_counties v
+WHERE state = 'Illinois'
+GROUP BY fips
+)
+SELECT county_name, s.state_name, covid.max_cases, county_geom
+FROM `bigquery-public-data.utility_us.us_county_area` c
+JOIN covid ON (CAST(covid.fips as string) = concat(state_fips_code, county_fips_code) )
+JOIN bigquery-public-data.utility_us.us_states_area s ON (c.state_fips_code = s.state_fips_code)
+ORDER BY max_cases DESC
+``` 
+It turns out that the `utility_us.us_county_area` table doesn't have the full FIPS code, which consists of a state ID concatenated with the county ID, so we use the CONCAT SQL operator to create the composite ID. We also have to do a little string manipulation to get the FIPS code from our COVID data into the same format. Otherwise, it's a straightforward join. If we plot the data for Illinois in BigQuery GeoViz, it looks like this:
+![Map of Illinois showing cases by county](img/illinois_cases.png)
+
+## Optimizing DataStudio
+Here is a [COVID-19 US dashboard](https://datastudio.google.com/reporting/1ae55c55-9993-4a17-83a1-17cd1bbdf180) built with DataStudio. It's mostly self-explanatory how to build reports using DataStudio. It's easy to add a date range control, which can be used to filter the data from all other graphs by specifying which field in the data source represents the "Date range dimension." Likewise, you can easily make table controls clickable simply by checking the "Apply filter" box in its data properties. That's how the clickable county table on the right side of the dashboard works.
+
+![COVID-19 US dashboard](img/covid19_dashboard.png)
+
+Earlier in this post, we looked at a SQL view that computes daily new cases as well a SQL view that provides only the most recent totals for each county. Each of these represents a separate BigQuery data source in Data Studio so they can be attached to controls. The scorecard elements on page 1, for example, showing the total number of cases and deaths, use the `most_recent_totals` view. However, when using a view directly, performance suffers. DataStudio BigQuery data sources are backed by [BI Engine](https://cloud.google.com/bi-engine), which caches data in memory to avoid having to run a query every time a user selects a different state or county, for example. However, BI Engine is not yet smart enough to cache SQL views, only regular tables. As a workaround, we can manually materialize views by creating tables. The last part of the daily import script above runs `materialize.sql`, which looks like this:
+
+```sql
+#standardSQL
+create or replace table covid19.us_daily_cases as
+select * from covid19.daily_new_cases
+        order by state, county, date
+;
+create or replace table covid19.us_totals as
+select * from covid19.most_recent_totals
+        order by state, county
+```
+
+We simply select all data from the view and order it according to the most common use case. We are effectively duplicating data; however, in this case, that is a small price to pay for the much improved performance of BI Engine. The current dataset is really small (<10 MB at this writing) so we could duplicate it 50x before getting charged even a penny per month for storage. You can confirm that BI Engine is in use when you see the lightning symbol above a chart or table. Also you'll notice the performance improvement: the COVID dashboard I've shared responds in miliseconds with BI Engine vs. seconds without. BI Engine has a decent free tier (1GB RAM at time of writing) so using it in this dashboard is a no-brainer. If our dataset were larger, we would use [partitioning](https://github.com/GoogleCloudPlatform/training-data-analyst/blob/master/courses/data-engineering/demos/partition.md) and [clustering](https://github.com/GoogleCloudPlatform/training-data-analyst/blob/master/courses/data-engineering/demos/clustering.md) along with BI Engine to realize performance improvements; however, this one is too small to benefit.
+
+BigQuery [materialized views](https://cloud.google.com/bigquery/docs/materialized-views-intro) are now in beta. Hopefully in the future, BI Engine will work with them and the workaround described here will longer be necessary.
+ 
+## Summary
+BigQuery's supporting free tools like GeoViz and DataStudio make it very productive for data exploration. BigQuery is productive even for small datasets and grows exponentially more powerful with larger datasets up to hundreds of petabytes. In a future post, we'll look at another powerful exploration tool now in beta, BigQuery Connected Sheets.
 
