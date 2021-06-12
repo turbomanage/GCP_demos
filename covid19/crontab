@@ -23,4 +23,4 @@
 # test
 #53 18 * * * /home/drfib13/demo/covid19/import.sh
 # prod
-59 23 * * * /home/drfib13/demo/covid19/import.sh
+59 23 * * * /home/turbomanage/GCP_demos/covid19/import.sh
