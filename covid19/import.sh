@@ -1,6 +1,6 @@
 #!/bin/bash
 # Change to your bucket
-export BUCKET="drfib"
+export BUCKET="turbomanage-covid19"
 cd ~/covid19
 export today="$(date +"%Y-%m-%d")"
 mkdir $today
@@ -15,7 +15,7 @@ bq load --source_format=CSV --autodetect --replace \
 bq load --source_format=CSV --autodetect --replace \
 	covid19.us_states \
 	gs://$BUCKET/covid19/"$today"/us-states.csv
-bq query <~/demo/covid19/create_views.sql
-bq query <~/demo/covid19/materialize.sql
-bq query <~/demo/covid19/per_capita.sql
-bq query <~/demo/covid19/rolling.sql
+bq query <~/GCP_demos/covid19/create_views.sql
+bq query <~/GCP_demos/covid19/materialize.sql
+rm -rf $today
+rm us-counties* us-states*
